@@ -1,12 +1,3 @@
-import Foundation
-
-enum OpCode: Byte {
-    case lda_imm = 0xA9
-    case lda_zp  = 0xA5
-    case lda_zpx = 0xB5
-    case jsr_abs = 0x20
-}
-
 public struct CPU {
     private var pc: Word // Program Counter
 
@@ -55,7 +46,6 @@ public struct CPU {
 
     var memory: Memory
 
-
     init() {
         pc = 0xFFFC
         sp = 0x0100
@@ -100,25 +90,42 @@ public struct CPU {
         while cycles > 0 {
             let maybe_opcode = fetchByte(&cycles)
 
-            if let opcode = OpCode(rawValue: maybe_opcode) {
-                switch opcode {
-                case .lda_imm: // LDA Immediate
-                    lda_imm(&cycles)
-                    break
-                case .lda_zp: // LDA Zero Page
-                    lda_zp(&cycles)
-                    break
-                case .lda_zpx: // LDA Zero Page, X
-                    lda_zpx(&cycles)
-                    break
-                case .jsr_abs: // JSR Absolute
-                    jsr_abs(&cycles)
-                    break
-                }
-            } else {
+            let (instruction, mode) = decodeOpcode(maybe_opcode)
+
+            guard let instruction = instruction, let mode = mode else {
                 print("Unknown opcode: \(maybe_opcode)")
+                continue
+            }
+            switch instruction {
+            case .lda: // LDA Immediate
+                lda(&cycles, mode)
+                break
+            case .jsr: // JSR Absolute
+                jsr(&cycles, mode)
+                break
+            default:
+                fatalError("Unhandled instruction: \(instruction)")
             }
         }
+    }
+
+    mutating func lda(_ cycles: inout UInt32, _ mode: AddressingMode) {
+        switch mode {
+        case .imm:
+            a = fetchByte(&cycles)
+            break
+        case .zp:
+            let zeroPageAddr = fetchByte(&cycles)
+            a = readByte(zeroPageAddr, &cycles)
+            break
+        case .zpx:
+            let zeroPageAddr = fetchByte(&cycles)
+            a = readByte(zeroPageAddr + x, &cycles)
+            break
+        default:
+            fatalError("Unhandled addressing mode: \(mode)")
+        }
+        lda_set_status()
     }
 
     mutating func lda_set_status() {
@@ -126,35 +133,20 @@ public struct CPU {
         n = (a & 0b10000000) != 0
     }
 
-    mutating func lda_imm(_ cycles: inout UInt32) {
-        a = fetchByte(&cycles)
-        lda_set_status()
-    }
-
-    mutating func lda_zp(_ cycles: inout UInt32) {
-        let zeroPageAddr = fetchByte(&cycles)
-        a = readByte(zeroPageAddr, &cycles)
-        lda_set_status()
-    }
-
-    mutating func lda_zpx(_ cycles: inout UInt32) {
-        let zeroPageAddr = fetchByte(&cycles)
-        a = readByte(zeroPageAddr + x, &cycles)
-        lda_set_status()
-    }
-
-    mutating func jsr_abs(_ cycles: inout UInt32) {
-        let addr = fetchWord(&cycles)
-        memory[sp &- 1] = Byte(pc >> 8)
-        memory[sp &- 2] = Byte(pc & 0xFF)
-        sp &-= 2
-        pc = addr
-        cycles &-= 6
-    }
-
-    func toHex<T>(_ number: T) -> String
-        where T : BinaryInteger {
-        return NSString(format: "0x%02X", number as! CVarArg) as String
+    mutating func jsr(_ cycles: inout UInt32, _ mode: AddressingMode) {
+        switch mode {
+        case .abs:
+            let addr = fetchWord(&cycles)
+            memory[sp &- 1] = Byte(pc >> 8)
+            memory[sp &- 2] = Byte(pc & 0xFF)
+            sp &-= 2
+            pc = addr
+            cycles &-= 6
+            break
+        default:
+            print("Unhandled addressing mode: \(mode)")
+            break
+        }
     }
 
     func toString() -> String {
