@@ -1,0 +1,22 @@
+{
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:Swift6502}",
+      "name": "Debug emulator",
+      "program": "${workspaceFolder:Swift6502}/.build/debug/emulator",
+      "preLaunchTask": "swift: Build Debug emulator"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:Swift6502}",
+      "name": "Release emulator",
+      "program": "${workspaceFolder:Swift6502}/.build/release/emulator",
+      "preLaunchTask": "swift: Build Release emulator"
+    }
+  ]
+}
