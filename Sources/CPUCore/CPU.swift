@@ -1,52 +1,58 @@
+enum CPUError: Error {
+    case unknownOpcode(Byte)
+    case unhandledInstruction(Instruction)
+    case unhandledAddressingMode(AddressingMode)
+}
+
 public struct CPU {
-    private var pc: Word // Program Counter
+    var pc: Word // Program Counter
 
     // should be Byte, change later
-    private var sp: Word // Stack Pointer
+    var sp: Word // Stack Pointer
 
     // Registers
-    private var a: Byte, x: Byte, y: Byte
+    public var a: Byte, x: Byte, y: Byte
 
-    private var flags: Byte // Status Flags
+    var flags: Byte // Status Flags
 
-    private var c: Bool {
+    var c: Bool {
         get { (flags & 0b00000001) != 0 }
         set { flags = newValue ? (flags | 0b00000001) : (flags & ~0b00000001) }
     }
 
-    private var z: Bool {
+    var z: Bool {
         get { (flags & 0b00000010) != 0 }
         set { flags = newValue ? (flags | 0b00000010) : (flags & ~0b00000010) }
     }
 
-    private var i: Bool {
+    var i: Bool {
         get { (flags & 0b00000100) != 0 }
         set { flags = newValue ? (flags | 0b00000100) : (flags & ~0b00000100) }
     }
 
-    private var d: Bool {
+    var d: Bool {
         get { (flags & 0b00001000) != 0 }
         set { flags = newValue ? (flags | 0b00001000) : (flags & ~0b00001000) }
     }
 
-    private var b: Bool {
+    var b: Bool {
         get { (flags & 0b00010000) != 0 }
         set { flags = newValue ? (flags | 0b00010000) : (flags & ~0b00010000) }
     }
 
-    private var v: Bool {
+    var v: Bool {
         get { (flags & 0b00100000) != 0 }
         set { flags = newValue ? (flags | 0b00100000) : (flags & ~0b00100000) }
     }
 
-    private var n: Bool {
+    var n: Bool {
         get { (flags & 0b01000000) != 0 }
         set { flags = newValue ? (flags | 0b01000000) : (flags & ~0b01000000) }
     }
 
-    var memory: Memory
+    public var memory: Memory
 
-    init() {
+    public init() {
         pc = 0xFFFC
         sp = 0x0100
         flags = 0x00
@@ -56,7 +62,7 @@ public struct CPU {
         memory = Memory()
     }
 
-    mutating func reset() {
+    public mutating func reset() {
         pc = 0xFFFC
         sp = 0x0100
         flags = 0x00
@@ -66,50 +72,73 @@ public struct CPU {
         memory = Memory()
     }
 
-    mutating func fetchByte(_ cycles: inout UInt32) -> Byte {
+    mutating func fetchByte(_ cycles: inout UInt32) -> Byte
+    {
         let data = memory[pc]
         pc &+= 1
         cycles &-= 1
         return data
     }
 
-    mutating func fetchWord(_ cycles: inout UInt32) -> Word {
+    mutating func fetchWord(_ cycles: inout UInt32) -> Word
+    {
         let lo = fetchByte(&cycles)
         let hi = fetchByte(&cycles)
         return Word(hi) << 8 | Word(lo)
     }
 
-    mutating func readByte(_ addr: Byte, _ cycles: inout UInt32) -> Byte {
+    mutating func readWord(_ addr: Word, _ cycles: inout UInt32) -> Word
+    {
+        let lo = readByte(addr, &cycles)
+        let hi = readByte(addr &+ 1, &cycles)
+        return Word(hi) << 8 | Word(lo)
+    }
+
+    mutating func readWord(_ addr: Byte, _ cycles: inout UInt32) -> Word
+    {
+        return readWord(Word(addr), &cycles)
+    }
+
+    mutating func readByte(_ addr: Byte, _ cycles: inout UInt32) -> Byte
+    {
+        return readByte(Word(addr), &cycles)
+    }
+
+    mutating func readByte(_ addr: Word, _ cycles: inout UInt32) -> Byte
+    {
         let data = memory[addr]
         cycles &-= 1
         return data
     }
 
-    mutating func execute(_ cycles: UInt32) {
+    public mutating func execute(_ cycles: UInt32) throws
+    {
+        print("\n\n\n\n\n\n\n\n\nExecuting \(cycles) cycles")
+
         var cycles = cycles
         while cycles > 0 {
-            let maybe_opcode = fetchByte(&cycles)
+            let maybe_opcode = fetchByte(&cycles) // -1
 
             let (instruction, mode) = decodeOpcode(maybe_opcode)
 
             guard let instruction = instruction, let mode = mode else {
-                print("Unknown opcode: \(maybe_opcode)")
-                continue
+                throw CPUError.unknownOpcode(maybe_opcode)
             }
             switch instruction {
             case .lda: // LDA Immediate
-                lda(&cycles, mode)
+                try lda(&cycles, mode)
                 break
             case .jsr: // JSR Absolute
                 jsr(&cycles, mode)
                 break
             default:
-                fatalError("Unhandled instruction: \(instruction)")
+                throw CPUError.unhandledInstruction(instruction)
             }
         }
     }
 
-    mutating func lda(_ cycles: inout UInt32, _ mode: AddressingMode) {
+    mutating func lda(_ cycles: inout UInt32, _ mode: AddressingMode) throws
+    {
         switch mode {
         case .imm:
             a = fetchByte(&cycles)
@@ -120,20 +149,51 @@ public struct CPU {
             break
         case .zpx:
             let zeroPageAddr = fetchByte(&cycles)
+            cycles &-= 1
             a = readByte(zeroPageAddr + x, &cycles)
             break
+        case .abs:
+            let addr = fetchWord(&cycles)
+            a = readByte(addr, &cycles)
+        break
+        case .abx:
+            let addr = fetchWord(&cycles)
+            a = readByte(addr + x, &cycles)
+        break
+        case .aby:
+            let addr = fetchWord(&cycles)
+            a = readByte(addr + y, &cycles)
+        break
+        case .idx:
+            let zeroPageAddr = fetchByte(&cycles)
+            cycles &-= 1
+            let addr = readWord(zeroPageAddr &+ x, &cycles)
+            a = readByte(addr, &cycles)
+        break
+        case .idy:
+            let zeroPageAddr = fetchByte(&cycles)
+            let addr = readWord(zeroPageAddr, &cycles)
+            let addrY = addr + Word(y)
+            let crossedPageBoundary = (addr ^ addrY) >> 8 != 0
+            if (crossedPageBoundary) {
+                cycles &-= 1
+            }
+            a = readByte(addrY, &cycles)
+        break
         default:
-            fatalError("Unhandled addressing mode: \(mode)")
+            throw CPUError.unhandledAddressingMode(mode)
         }
         lda_set_status()
     }
 
-    mutating func lda_set_status() {
+    mutating func lda_set_status()
+    {
         z = a == 0
         n = (a & 0b10000000) != 0
     }
 
-    mutating func jsr(_ cycles: inout UInt32, _ mode: AddressingMode) {
+    mutating func jsr(_ cycles: inout UInt32, _ mode: AddressingMode)
+    {
         switch mode {
         case .abs:
             let addr = fetchWord(&cycles)
@@ -149,7 +209,8 @@ public struct CPU {
         }
     }
 
-    func toString() -> String {
+    public func toString() -> String
+    {
         return """
         CPU {
             PC: \(toHex(pc))
