@@ -19,38 +19,38 @@ public struct CPU {
     private var flags: Byte // Status Flags
 
     private var c: Bool {
-        get { (flags & 0b00000001) != 0 } // Check the first bit
+        get { (flags & 0b00000001) != 0 }
         set { flags = newValue ? (flags | 0b00000001) : (flags & ~0b00000001) }
     }
 
     private var z: Bool {
-        get { (flags & 0b00000010) != 0 } // Check the second bit
+        get { (flags & 0b00000010) != 0 }
         set { flags = newValue ? (flags | 0b00000010) : (flags & ~0b00000010) }
     }
 
     private var i: Bool {
-        get { (flags & 0b00000100) != 0 } // Check the third bit
+        get { (flags & 0b00000100) != 0 }
         set { flags = newValue ? (flags | 0b00000100) : (flags & ~0b00000100) }
     }
 
     private var d: Bool {
-        get { (flags & 0b00001000) != 0 } // Check the fourth bit
+        get { (flags & 0b00001000) != 0 }
         set { flags = newValue ? (flags | 0b00001000) : (flags & ~0b00001000) }
     }
 
     private var b: Bool {
-        get { (flags & 0b00010000) != 0 } // Check the fifth bit
+        get { (flags & 0b00010000) != 0 }
         set { flags = newValue ? (flags | 0b00010000) : (flags & ~0b00010000) }
     }
 
     private var v: Bool {
-        get { (flags & 0b00100000) != 0 } // Check the sixth bit
+        get { (flags & 0b00100000) != 0 }
         set { flags = newValue ? (flags | 0b00100000) : (flags & ~0b00100000) }
     }
 
     private var n: Bool {
-        get { (flags & 0b10000000) != 0 } // Check the seventh bit
-        set { flags = newValue ? (flags | 0b10000000) : (flags & ~0b10000000) }
+        get { (flags & 0b01000000) != 0 }
+        set { flags = newValue ? (flags | 0b01000000) : (flags & ~0b01000000) }
     }
 
     var memory: Memory
